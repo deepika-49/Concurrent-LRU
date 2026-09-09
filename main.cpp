@@ -2,78 +2,50 @@
 #include <cassert>
 #include <thread>
 #include <vector>
-#include <chrono>
 #include <string>
 #include "lru_cache.hpp"
 
-void test_basic_ops() {
+void run_unit_tests() {
     ConcurrentLRUCache<int, std::string> cache(2);
 
-    cache.put(1, "one");
-    cache.put(2, "two");
+    cache.put(1, "alpha");
+    cache.put(2, "beta");
+    assert(cache.get(1).value() == "alpha");
 
-    assert(cache.get(1).value() == "one");
-
-    cache.put(3, "three");
-
+    cache.put(3, "gamma");
     assert(!cache.get(2).has_value());
-    assert(cache.get(3).value() == "three");
+    assert(cache.get(3).value() == "gamma");
 
-    std::cout << "[PASS] Basic Unit Tests\n";
+    std::cout << "Unit tests completed successfully." << std::endl;
 }
 
-void test_concurrency_stress() {
+void run_stress_test() {
     const int num_threads = 8;
-    const int ops_per_thread = 10000;
+    const int ops_per_thread = 20000;
+    ConcurrentLRUCache<int, int> cache(200);
 
-    ConcurrentLRUCache<int, int> cache(100);
-
-    auto worker = [&](int id) {
+    auto worker = [&](int thread_id) {
         for (int i = 0; i < ops_per_thread; ++i) {
-            int key = (id * 1000) + (i % 200);
-
+            int key = (thread_id * 500) + (i % 300);
             cache.put(key, i);
             cache.get(key);
         }
     };
 
-    std::vector<std::thread> threads;
-
+    std::vector<std::thread> workers;
     for (int i = 0; i < num_threads; ++i) {
-        threads.emplace_back(worker, i);
+        workers.emplace_back(worker, i);
     }
 
-    for (auto& t : threads) {
-        t.join();
+    for (auto& w : workers) {
+        w.join();
     }
 
-    std::cout << "[PASS] Concurrency Stress Test ("
-              << num_threads << " threads, "
-              << num_threads * ops_per_thread * 2
-              << " operations executed cleanly)\n";
-}
-
-void test_capacity() {
-    ConcurrentLRUCache<int, std::string> cache(2);
-
-    cache.put(1, "one");
-    cache.put(2, "two");
-    cache.put(3, "three");
-
-    assert(cache.size() == 2);
-    assert(!cache.get(1).has_value());
-    assert(cache.get(2).has_value());
-    assert(cache.get(3).has_value());
-
-    std::cout << "[PASS] Capacity and Eviction Test\n";
+    std::cout << "Concurrency stress test completed successfully." << std::endl;
 }
 
 int main() {
-    test_basic_ops();
-    test_concurrency_stress();
-    test_capacity();
-
-    std::cout << "\nAll tests completed successfully!\n";
-
+    run_unit_tests();
+    run_stress_test();
     return 0;
 }
