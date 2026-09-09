@@ -1,6 +1,6 @@
-#pragma once
+#ifndef CONCURRENT_LRU_CACHE_HPP
+#define CONCURRENT_LRU_CACHE_HPP
 
-#include <iostream>
 #include <unordered_map>
 #include <list>
 #include <shared_mutex>
@@ -9,67 +9,63 @@
 #include <utility>
 #include <stdexcept>
 
-template <typename KeyType, typename ValueType>
+template <typename K, typename V>
 class ConcurrentLRUCache {
 public:
-    explicit ConcurrentLRUCache(size_t capacity) : capacity_(capacity) {
+    explicit ConcurrentLRUCache(size_t capacity) : cap_(capacity) {
         if (capacity == 0) {
-            throw std::invalid_argument("Capacity must be greater than zero.");
+            throw std::invalid_argument("Capacity must be greater than zero");
         }
     }
 
-    std::optional<ValueType> get(const KeyType& key) {
-        std::unique_lock<std::shared_mutex> lock(mutex_);
-
+    std::optional<V> get(const K& key) {
+        std::unique_lock<std::shared_mutex> lock(mtx_);
         auto it = map_.find(key);
-
         if (it == map_.end()) {
             return std::nullopt;
         }
-
-        list_.splice(list_.begin(), list_, it->second);
-
+        items_.splice(items_.begin(), items_, it->second);
         return it->second->second;
     }
 
-    void put(const KeyType& key, const ValueType& value) {
-        std::unique_lock<std::shared_mutex> lock(mutex_);
-
+    void put(const K& key, const V& value) {
+        std::unique_lock<std::shared_mutex> lock(mtx_);
         auto it = map_.find(key);
 
         if (it != map_.end()) {
             it->second->second = value;
-            list_.splice(list_.begin(), list_, it->second);
+            items_.splice(items_.begin(), items_, it->second);
             return;
         }
 
-        if (map_.size() >= capacity_) {
-            auto last_it = list_.end();
-            --last_it;
-
-            map_.erase(last_it->first);
-            list_.pop_back();
+        if (map_.size() >= cap_) {
+            auto last = items_.end();
+            --last;
+            map_.erase(last->first);
+            items_.pop_back();
         }
 
-        list_.push_front({key, value});
-        map_[key] = list_.begin();
+        items_.push_front({key, value});
+        map_[key] = items_.begin();
     }
 
     size_t size() const {
-        std::shared_lock<std::shared_mutex> lock(mutex_);
+        std::shared_lock<std::shared_mutex> lock(mtx_);
         return map_.size();
     }
 
     size_t capacity() const {
-        return capacity_;
+        return cap_;
     }
 
 private:
-    using Node = std::pair<KeyType, ValueType>;
-    using ListIterator = typename std::list<Node>::iterator;
+    using Pair = std::pair<K, V>;
+    using ListIt = typename std::list<Pair>::iterator;
 
-    size_t capacity_;
-    std::list<Node> list_;
-    std::unordered_map<KeyType, ListIterator> map_;
-    mutable std::shared_mutex mutex_;
+    size_t cap_;
+    std::list<Pair> items_;
+    std::unordered_map<K, ListIt> map_;
+    mutable std::shared_mutex mtx_;
 };
+
+#endif
